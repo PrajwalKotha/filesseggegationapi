@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:file="http://www.mulesoft.org/schema/mule/file"
+	xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/file http://www.mulesoft.org/schema/mule/file/current/mule-file.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+	<flow name="filesseggegationapiFlow" doc:id="fed29a43-96a1-4763-b5a5-35c5ba07e3c5" >
+		<scheduler doc:name="Scheduler" doc:id="1cb48717-0efb-4594-b5b6-b773cc2cedf2" >
+			<scheduling-strategy >
+				<fixed-frequency timeUnit="DAYS"/>
+			</scheduling-strategy>
+		</scheduler>
+		<set-variable value='#["H:\\My Drive"]' doc:name="Set Variable" doc:id="057d06f4-7dec-4dfe-a207-9e9b4d36f564" variableName="folderPath"/>
+		<file:list doc:name="List" doc:id="7bda1ea7-a849-432a-8449-ef36222e215f" directoryPath="#[vars.folderPath]">
+			<ee:repeatable-file-store-iterable inMemoryObjects="10000" />
+			<file:matcher directories="EXCLUDE" />
+		</file:list>
+		<ee:transform doc:name="Transform Message" doc:id="2e721a79-bcfc-47c4-bb6c-7321fc57a936" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+(payload map ( $.attributes)) groupBy ((item, index) -> (item.fileName splitBy  ".")[-1])]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<set-variable value="#[payload]" doc:name="Set Variable" doc:id="2250633a-b053-494a-9d6a-03f9abb3e939" variableName="allFiles"/>
+		<logger level="INFO" doc:name="Logger" doc:id="e73c90e7-a6b8-437d-aaf8-0cd844d99b54" message="#[payload]"/>
+		<logger level="INFO" doc:name="Logger" doc:id="1d7fa4e8-c52e-49f1-acbe-eba45333fab9" message="#[sizeOf(payload)]"/>
+		<parallel-foreach doc:name="Parallel For Each" doc:id="c62e24db-ac7d-4f9e-80e1-6e9489ad3f7e" collection="#[%dw 2.0&#10;output application/java&#10;---&#10; 0 to sizeOf(payload) - 1]">
+			<set-variable value="#[output application/json --- (vars.allFiles pluck $$)[payload]]" doc:name="Set Variable" doc:id="d72c3bfa-ee2e-40d5-add9-e50e3bdb3106" variableName="folderName" />
+			<set-payload value="#[output application/java --- vars.allFiles[payload]]" doc:name="Set Payload" doc:id="ffad331c-70fb-470c-bb15-2296379d5f22" />
+			<foreach doc:name="For Each" doc:id="e13fb920-000d-4217-9d29-a0d3d059f5f7" collection="#[%dw 2.0&#10;output application/json&#10;---&#10;payload]">
+				<logger level="INFO" doc:name="Logger" doc:id="40543790-d874-432c-931f-cdf35f75a242" message='File Transfer started -  #[payload.path]'/>
+				<file:move doc:name="Move" doc:id="938a76a0-c8a0-46a9-9201-81ab8a37be8f" sourcePath="#[payload.path]" targetPath='#[vars.folderPath ++ "\\" ++ vars.folderName]' overwrite="true"/>
+				<logger level="INFO" doc:name="Logger" doc:id="e7590c06-c088-440f-bd9f-d9ce08674f7c" message="counter - #[vars.counter] done"/>
+			</foreach>
+		</parallel-foreach>
+	</flow>
+</mule>
